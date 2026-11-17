@@ -13,6 +13,10 @@
 	"private": true,
 	"main": "electron/main.cjs",
 	"scripts": {
+		"android:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1",
+		"android:gateway": "node scripts/android-gateway.mjs",
+		"android:server": "next start -H 127.0.0.1",
+		"android:test": "node --test tests/android-gateway.test.mjs",
 		"dev": "npm run plugins:build-core && npm run plugins:build-authoring && next dev -H localhost",
 		"build": "npm run plugins:build-core && npm run plugins:build-authoring && next build",
 		"start": "next start -H localhost",

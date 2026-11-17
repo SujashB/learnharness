@@ -1,4 +1,9 @@
 node_modules/
+/.android-tools/
+/.android-pairing/
+/android/.gradle/
+/android/local.properties
+/android/**/build/
 data/
 .next/
 *.log

@@ -85,6 +85,8 @@ export function AttachFilesButton({ editorRef }: { editorRef: React.RefObject<HT
 	const controller = useOptionalInteractionLayers();
 	const pickerRef = useRef<HTMLInputElement>(null);
 	const desktop = useDesktopPaths();
+	const android = useSyncExternalStore(noSubscribe, () => navigator.userAgent.includes("LearnHarnessAndroid/1"), () => false);
+	const [uploading, setUploading] = useState(false);
 	const buttonRef = useRef<HTMLButtonElement>(null);
 	const popupRef = useRef<HTMLDivElement>(null);
 	const choosingFolder = useRef(false);
@@ -149,23 +151,44 @@ export function AttachFilesButton({ editorRef }: { editorRef: React.RefObject<HT
 				multiple
 				hidden
 				data-testid="attach-files-input"
-				onChange={(e) => {
+				onChange={async (e) => {
+					const files = Array.from(e.currentTarget.files ?? []);
+					e.currentTarget.value = "";
+					if (android && !desktop) {
+						const editor = editorRef.current;
+						setUploading(true);
+						setNotice("Uploading files to your PC…");
+						try {
+							for (const file of files) {
+								if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name}: files must be 25 MiB or smaller.`);
+								const response = await fetch("/__android/upload", { method: "POST", headers: { "X-Filename": encodeURIComponent(file.name), "Content-Type": "application/octet-stream" }, body: file });
+								const result = await response.json();
+								if (!response.ok || typeof result.path !== "string") throw new Error(result.error ?? "Upload failed.");
+								quoteFilePath(result.path);
+								if (editor?.isConnected && editor === editorRef.current) editor.dispatchEvent(new CustomEvent(INSERT_FILE_PATHS_EVENT, { detail: [result.path] }));
+							}
+							setNotice("");
+						} catch (error) { setNotice(error instanceof Error ? error.message : "Upload failed. Try again."); }
+						finally { setUploading(false); }
+						return;
+					}
 					const resolve = window.lh?.getPathForFile;
-					const { paths } = resolve ? pathsForFiles(Array.from(e.currentTarget.files ?? []), resolve) : { paths: [] };
+					const { paths } = resolve ? pathsForFiles(files, resolve) : { paths: [] };
 					if (paths.length > 0) editorRef.current?.dispatchEvent(new CustomEvent(INSERT_FILE_PATHS_EVENT, { detail: paths }));
 					e.currentTarget.value = ""; // allow re-picking the same file
 				}}
 			/>
-			<Hint label={desktop ? "Attach files or a folder" : BROWSER_NOTICE}>
+			<Hint label={desktop ? "Attach files or a folder" : android ? "Upload files to your PC" : BROWSER_NOTICE}>
 				<button
 					ref={buttonRef}
 					type="button"
 					aria-label="Attach files"
-					aria-disabled={!desktop}
+					aria-disabled={(!desktop && !android) || uploading}
+					disabled={uploading}
 					aria-haspopup="menu"
 					aria-expanded={open}
 					data-testid="attach-files"
-					onClick={() => { if (desktop) { setNotice(""); setOpen(!open); } }}
+					onClick={() => { if (desktop) { setNotice(""); setOpen(!open); } else if (android) { setNotice(""); pickerRef.current?.click(); } }}
 					className="flex size-10 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground"
 				>
 					<PaperclipIcon className="size-4" />
